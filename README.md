@@ -5,7 +5,7 @@ The project demonstrates practical skills in data cleaning, financial data trans
   - Performed advanced data cleaning on unstructured Excel financial data
   - Standardized currency formats and handled negative values and inconsistencies
   - Conducted exploratory trend analysis on revenue and net income
-  - Built regression-based forecasting models for 5-year financial prediction
+  - Built regression-based forecasting models for 10-year financial prediction
   - Generated future projections to support strategic business insights
 ### Technologies Used
   - Python
