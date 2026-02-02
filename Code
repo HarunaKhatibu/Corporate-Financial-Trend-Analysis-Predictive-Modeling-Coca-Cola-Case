@@ -1,0 +1,145 @@
+## Library Import and Environment Setup
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.linear_model import LinearRegression
+
+## 1. LOAD & CLEAN
+file_path = r"C:\Users\Hp\Downloads\Cola.xlsx"
+raw_df = pd.read_excel(file_path)
+raw_df
+
+header_idx = raw_df[raw_df.apply(lambda r: r.str.contains("FY '", na=False).any(), axis=1)].index[0]
+headers = raw_df.iloc[header_idx].values
+headers
+
+data = raw_df.iloc[header_idx+1:].copy()
+data.columns = headers
+data = data.rename(columns={data.columns[1]: 'Metric'})
+data = data.dropna(subset=['Metric'])
+data
+
+def clean_finance(x):
+    if pd.isna(x) or x == '' or x == '-': return 0.0
+    if isinstance(x, str):
+        x = x.replace(',', '').replace('$', '').strip()
+        if '(' in x and ')' in x:
+            x = '-' + x.replace('(', '').replace(')', '')
+    try: return float(x)
+    except: return 0.0
+
+## Apply the cleaning to all year columns
+year_cols = [c for c in data.columns if "FY '" in str(c)]
+for col in year_cols:
+    data[col] = data[col].apply(clean_finance)
+
+## TRANSPOSE FOR ANALYSIS
+We flip the data so years are the index and metrics are columns
+df = data.set_index('Metric')[year_cols].transpose()
+df.index = [int('20'+c[-2:]) for c in df.index]
+df.index.name = 'Year'
+df
+
+## DATA ANALYSIS CALCULATIONS
+We calculate Profitability Margins and Year-over-Year Growth
+revenue_key = 'NET OPERATING REVENUES'
+gp_key = 'Gross Profit'
+ni_key = 'NET INCOME ATTRIBUTABLE TO SHAREOWNERS OF THE COCA-COLA COMPANY'
+df['Gross_Margin_%'] = (df[gp_key] / df[revenue_key]) * 100
+df
+
+df['Net_Profit_Margin_%'] = (df[ni_key] / df[revenue_key]) * 100
+df['Revenue_Growth_%'] = df[revenue_key].pct_change() * 100
+df['YoY_Growth_%'] = df[revenue_key].pct_change() * 100
+df
+
+## VISUALIZATION
+plt.figure(figsize=(14, 6))
+### Subplot 1: Revenue vs Net Income
+plt.subplot(1, 2, 1)
+plt.plot(df.index, df[revenue_key], marker='o', color='red', linewidth=2, label='Total Revenue')
+plt.plot(df.index, df[ni_key], marker='s', color='black', label='Net Profit')
+plt.title('Revenue & Profit Trends (2009-2018)')
+plt.ylabel('Millions of USD')
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+
+### Subplot 2: Profitability Efficiency
+plt.subplot(1, 2, 2)
+plt.bar(df.index, df['Net_Profit_Margin_%'], color='darkred', alpha=0.7)
+plt.axhline(df['Net_Profit_Margin_%'].mean(), color='blue', linestyle='--', label='Average Margin')
+plt.title('Net Profit Margin % (Efficiency)')
+plt.ylabel('Percentage')
+plt.legend()
+
+### YoY Growth Bar Chart
+plt.figure(figsize=(10, 6))
+colors = ['red' if x < 0 else 'green' for x in df['YoY_Growth_%'].fillna(0)]
+df['YoY_Growth_%'].plot(kind='bar', color=colors)
+plt.axhline(0, color='black', linewidth=0.8)
+plt.title('3. Year-over-Year Revenue Growth %')
+plt.savefig('bar_yoy_growth.png')
+
+### Correlation Heatmap
+plt.figure(figsize=(10, 8))
+corr_metrics = [revenue_key, 'Cost of goods sold', gp_key, 'Operating Income', ni_key]
+sns.heatmap(df[corr_metrics].corr(), annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Heatmap: Financial Metric Relationships')
+plt.savefig('unified_correlation_heatmap.png')
+
+### Output the result
+print("--- Final Cleaned Analysis ---")
+print(df[[revenue_key, ni_key, 'Net_Profit_Margin_%']].tail())
+
+##MACHINE LEARNING & OUTLIER REMOVAL
+### Identifying 2017 as the Outlier (Tax event)
+df_no_outlier = df.drop(index=2017)
+
+future_years = np.array(range(2019, 2029)).reshape(-1, 1)
+X_train_rev = np.array(df.index).reshape(-1, 1)
+X_train_ni = np.array(df_no_outlier.index).reshape(-1, 1)
+X_train_ni
+
+### Fit Models
+model_rev = LinearRegression().fit(X_train_rev, df[revenue_key])
+model_ni = LinearRegression().fit(X_train_ni, df_no_outlier[ni_key])
+model_rev
+
+### Predict
+rev_preds = model_rev.predict(future_years)
+ni_preds = model_ni.predict(future_years)
+rev_preds,ni_preds 
+
+### Revenue Forecast Plot
+plt.subplot(1, 2, 1)
+plt.scatter(df.index, df[revenue_key], color='black', label='Historical')
+plt.plot(future_years, rev_preds, color='red', linestyle='--', marker='o', label='ML Forecast')
+plt.title('10-Year Revenue Forecast')
+plt.grid(True, alpha=0.3)
+plt.legend()
+
+### Net Income Forecast Plot
+plt.subplot(1, 2, 2)
+plt.scatter(df.index, df[ni_key], color='black', label='Historical')
+plt.scatter([2017], [df.loc[2017, ni_key]], color='orange', marker='x', s=100, label='Outlier (2017)')
+plt.plot(future_years, ni_preds, color='blue', linestyle='--', marker='o', label='Optimized Forecast')
+plt.title('10-Year Net Income Forecast (Outlier Handled)')
+plt.grid(True, alpha=0.3)
+plt.legend()
+
+### Save all results to one CSV
+forecast_df = pd.DataFrame({
+    'Year': future_years.flatten(),
+    'Revenue': rev_preds,
+    'Net Income': ni_preds,
+    'Data_Type': 'Forecast'
+})
+historical_df = df[[revenue_key, ni_key]].reset_index()
+historical_df.columns = ['Year', 'Revenue', 'Net Income']
+historical_df['Data_Type'] = 'Historical'
+
+final_combined_output = pd.concat([historical_df, forecast_df], ignore_index=True)
+final_combined_output.to_csv('coca_cola_full_analysis_report.csv', index=False)
+
+print("Full process completed successfully. Files generated")
