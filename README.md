@@ -15,4 +15,4 @@ The project demonstrates practical skills in data cleaning, financial data trans
   - Matplotlib / Seaborn
   - Jupyter Notebook
 ### Project Outcome
-Developed a predictive framework capable of forecasting Coca-Cola’s financial performance over a 10-year horizon, demonstrating applied machine learning skills in real-world financial analytics.
+Developed a predictive framework capable of forecasting Coca-Cola’s financial performance over a 10-year horizon, demonstrating applied machine learning skills in real-world financial analytics
